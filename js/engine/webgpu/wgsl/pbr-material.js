@@ -226,10 +226,10 @@ export function PBRFragmentSource(layout, fullyRough, flags) { return wgsl`
       let lightVis = dirLightVisibility(input.worldPos);
 
       // CSM Debugging
-      let cascade = selectCascade(0u, input.worldPos);
-      if (cascade.index >= 0) {
-        Lo = Lo + cascadeColors[cascade.index % 3];
-      }
+      //let cascade = selectCascade(0u, input.worldPos);
+      //if (cascade.index >= 0) {
+      //  Lo = Lo + cascadeColors[cascade.index % 3];
+      //}
 #else
       let lightVis = 1.0;
 #endif

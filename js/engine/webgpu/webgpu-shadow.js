@@ -211,6 +211,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
           });
 
           const zSpan = (zFar - zNear)/shadowCaster.cascades;
+          const zRatio = zFar / zNear;
           const zPt = vec4.create();
 
           for (let i = 0; i < shadowCaster.cascades; ++i) {
@@ -220,13 +221,19 @@ export class WebGPUShadowSystem extends WebGPUSystem {
             frameShadowCameras.push(shadowCamera);
 
             if (!shadowSettings.lockCascadeFrustum) {
-              vec4.set(zPt, 0, 0, (i * -zSpan) - zNear, 1);
-              vec4.transformMat4(zPt, zPt, proj);
-              const near = zPt[2] / zPt[3];
+              //let near = (i * -zSpan) - zNear
+              //let far = ((i+1) * -zSpan) - zNear
 
-              vec4.set(zPt, 0, 0, ((i+1) * -zSpan) - zNear, 1);
+              let near = -zNear * Math.pow(zRatio, ((i == 0 ? 0 : i + 1) / (shadowCaster.cascades + 1)));
+              let far = -zNear * Math.pow(zRatio, ((i + 2) / (shadowCaster.cascades + 1)));
+
+              vec4.set(zPt, 0, 0, near, 1);
               vec4.transformMat4(zPt, zPt, proj);
-              const far = zPt[2] / zPt[3];
+              near = zPt[2] / zPt[3];
+
+              vec4.set(zPt, 0, 0, far, 1);
+              vec4.transformMat4(zPt, zPt, proj);
+              far = zPt[2] / zPt[3];
 
               // Compute the world-space corners of this chunk of the frustum
               shadowCamera.frustumCorners = [
@@ -264,7 +271,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
 
               // Adjust the zNear/Far to ensure we don't miss scene geometry that's not in the
               // frustum but still may casts shadows.
-              const zMult = 3.0;
+              const zMult = 5.0;
               if (shadowCamera.min[2] < 0) {
                 shadowCamera.min[2] *= zMult;
               } else {
