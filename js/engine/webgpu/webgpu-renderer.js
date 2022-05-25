@@ -19,7 +19,7 @@ export class WebGPURenderer extends Renderer {
   bufferManager = null;
   #textureLoader = null;
 
-  shadowAtlasSize = 4098;
+  shadowAtlasSize = 8192;
   shadowFormat = 'depth16unorm';
 
   async init(canvas, flags) {
@@ -63,7 +63,7 @@ export class WebGPURenderer extends Renderer {
     this.shadowDepthTextureView = this.shadowDepthTexture.createView();
 
     this.lightShadowTableBuffer = this.device.createBuffer({
-      size: this.maxLightCount * Int32Array.BYTES_PER_ELEMENT,
+      size: this.maxLightCount * Int32Array.BYTES_PER_ELEMENT * 2,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
     });
 

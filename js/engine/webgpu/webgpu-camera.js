@@ -1,4 +1,5 @@
 import { WebGPUSystem } from './webgpu-system.js';
+import { Stage } from '../core/stage.js';
 import { mat4, vec3 } from 'gl-matrix';
 
 import { Transform } from '../core/transform.js';
@@ -104,6 +105,7 @@ export class WebGPUCamera extends WebGPUCameraBase {
 }
 
 export class WebGPUCameraSystem extends WebGPUSystem {
+  stage = Stage.PreRender;
   execute(delta, time, gpu) {
     // If a Camera does not have an associated WebGPUCamera add one.
     this.query(Camera).not(WebGPUCamera).forEach((entity) => {

@@ -33,7 +33,7 @@ export class WebGPUMaterialBindGroups {
   }
 }
 
-const INSTANCE_BUFFER_LAYOUT = {
+export const INSTANCE_BUFFER_LAYOUT = {
   arrayStride: 80,
   stepMode: 'instance',
   attributes: [

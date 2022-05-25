@@ -62,7 +62,7 @@ export class WebGPURenderBatch {
 
     instances.instanceCount += instance.count || 1;
     instances.transforms.push(instance.transform?.worldMatrix || IDENTITY_MATRIX);
-    instances.colors.push(instance.color?.buffer || DEFAULT_INSTANCE_COLOR);
+    instances.colors.push(instance.color?.buffer || instance.color || DEFAULT_INSTANCE_COLOR);
     this.#totalInstanceCount += 1;
   }
 

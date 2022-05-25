@@ -4,7 +4,8 @@ import { Transform } from '../core/transform.js';
 import { DirectionalLight, PointLight, ShadowCastingLight } from '../core/light.js';
 import { TextureAtlasAllocator } from '../util/texture-atlas-allocator.js';
 import { ShadowFragmentSource,  } from './wgsl/shadow.js';
-import { WebGPUCameraBase } from './webgpu-camera.js';
+import { WebGPUCamera, WebGPUCameraBase } from './webgpu-camera.js';
+import { WebGPUDebugPoint } from './webgpu-debug-point.js';
 
 import { mat4, vec3, vec4 } from 'gl-matrix';
 
@@ -31,11 +32,14 @@ const pointShadowUpDirs = [
 ];
 
 export class WebGPUShadowCamera extends WebGPUCameraBase {
-  constructor(gpu, rect) {
+  frustumCorners;
+  frustumCenter;
+  min;
+  max;
+
+  constructor(gpu) {
     super(gpu)
     const device = gpu.device;
-
-    this.updateRect(rect);
 
     const dummyStorageBuffer = device.createBuffer({
       size: 4,
@@ -93,6 +97,7 @@ export class WebGPUShadowSettings {
   depthBias = 0.1;
   depthBiasSlopeScale = 0.0;
   updated = false;
+  lockCascadeFrustum = false;
 }
 
 export class WebGPUShadowSystem extends WebGPUSystem {
@@ -108,6 +113,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
     this.shadowCastingLightQuery = this.query(ShadowCastingLight);
     this.shadowCameraQuery = this.query(WebGPUShadowCamera);
     this.shadowUpdateFrequency = gpu.flags.shadowUpdateFrequency;
+    this.cameraQuery = this.query(WebGPUCamera);
   }
 
   getOrCreateShadowPipeline(gpu, webgpuPipeline) {
@@ -163,7 +169,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
       return;
     }
 
-    const lightShadowTable = new Int32Array(gpu.maxLightCount);
+    const lightShadowTable = new Int32Array(gpu.maxLightCount * 2);
     lightShadowTable.fill(-1);
 
     const shadowProperties = new Float32Array(gpu.maxShadowCasters * 20);
@@ -174,50 +180,174 @@ export class WebGPUShadowSystem extends WebGPUSystem {
     this.shadowCastingLightQuery.forEach((entity, shadowCaster) => {
       const directionalLight = entity.get(DirectionalLight);
       if (directionalLight) {
-        let shadowCamera = this.#shadowCameraCache.get(directionalLight);
         const shadowMapSize = shadowCaster.textureSize * gpu.flags.shadowResolutionMultiplier;
-        if (!shadowCamera) {
-          const shadowAtlasRect = this.allocator.allocate(shadowMapSize);
-          shadowCamera = new WebGPUShadowCamera(gpu, shadowAtlasRect);
-          this.#shadowCameraCache.set(directionalLight, shadowCamera);
+
+        if (shadowCaster.cascades >= 0) {
+          // Cascading shadow map
+          let shadowCameras = this.#shadowCameraCache.get(directionalLight);
+          if (!shadowCameras || !Array.isArray(shadowCameras) || shadowCameras.length != shadowCaster.cascades) {
+            shadowCameras = [];
+            for (let i = 0; i < shadowCaster.cascades; ++i) {
+              shadowCameras.push(new WebGPUShadowCamera(gpu));
+            }
+            this.#shadowCameraCache.set(directionalLight, shadowCameras);
+          }
+
+          const logIt = (performance.now() - this.lastTime > 5000);
+          if (logIt) {
+            this.lastTime = performance.now();
+          }
+
+          // Get the inverse proj*view matrix for the camera.
+          const invViewProj = mat4.create();
+          let proj, zNear, zFar;
+          this.cameraQuery.forEach((entity, camera) => {
+            proj = camera.projection;
+            zNear = camera.zRange[0];
+            zFar = camera.zRange[1];
+            mat4.multiply(invViewProj, camera.projection, camera.view);
+            mat4.invert(invViewProj, invViewProj);
+            return false;
+          });
+
+          const zSpan = (zFar - zNear)/shadowCaster.cascades;
+          const zPt = vec4.create();
+
+          for (let i = 0; i < shadowCaster.cascades; ++i) {
+            const shadowAtlasRect = this.allocator.allocate(shadowMapSize);
+            const shadowCamera = shadowCameras[i];
+            shadowCamera.updateRect(shadowAtlasRect);
+            frameShadowCameras.push(shadowCamera);
+
+            if (!shadowSettings.lockCascadeFrustum) {
+              vec4.set(zPt, 0, 0, (i * -zSpan) - zNear, 1);
+              vec4.transformMat4(zPt, zPt, proj);
+              const near = zPt[2] / zPt[3];
+
+              vec4.set(zPt, 0, 0, ((i+1) * -zSpan) - zNear, 1);
+              vec4.transformMat4(zPt, zPt, proj);
+              const far = zPt[2] / zPt[3];
+
+              // Compute the world-space corners of this chunk of the frustum
+              shadowCamera.frustumCorners = [
+                vec4.transformMat4(vec4.create(), [-1,  1, near, 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [ 1,  1, near, 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [-1, -1, near, 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [ 1, -1, near, 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [-1,  1, far , 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [ 1,  1, far , 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [-1, -1, far , 1], invViewProj),
+                vec4.transformMat4(vec4.create(), [ 1, -1, far , 1], invViewProj),
+              ];
+
+              // Get the world-space center of the frustum
+              shadowCamera.frustumCenter = vec3.create();
+              for (const corner of shadowCamera.frustumCorners) {
+                vec4.scale(corner, corner, 1/corner[3]);
+                vec3.add(shadowCamera.frustumCenter, shadowCamera.frustumCenter, corner);
+              }
+              vec3.div(shadowCamera.frustumCenter, shadowCamera.frustumCenter, [8, 8, 8]);
+
+              // Compute the light's view matrix to point at the frustum center
+              vec3.add(shadowCamera.position, shadowCamera.frustumCenter, directionalLight.direction);
+              mat4.lookAt(shadowCamera.view, shadowCamera.position, shadowCamera.frustumCenter, shadowCaster.up);
+
+              // Generate a light-space bounding box for the frustum
+              const lightSpaceVec = vec3.create();
+              shadowCamera.min = vec3.fromValues(Number.MAX_VALUE, Number.MAX_VALUE, Number.MAX_VALUE);
+              shadowCamera.max = vec3.fromValues(Number.MIN_VALUE, Number.MIN_VALUE, Number.MIN_VALUE);
+              for (const corner of shadowCamera.frustumCorners) {
+                vec3.transformMat4(lightSpaceVec, corner, shadowCamera.view);
+                vec3.min(shadowCamera.min, shadowCamera.min, lightSpaceVec);
+                vec3.max(shadowCamera.max, shadowCamera.max, lightSpaceVec);
+              }
+
+              // Adjust the zNear/Far to ensure we don't miss scene geometry that's not in the
+              // frustum but still may casts shadows.
+              const zMult = 2.0;
+              if (shadowCamera.min[2] < 0) {
+                shadowCamera.min[2] *= zMult;
+              } else {
+                shadowCamera.min[2] /= zMult;
+              }
+              if (shadowCamera.max[2] < 0) {
+                shadowCamera.max[2] /= zMult;
+              } else {
+                shadowCamera.max[2] *= zMult;
+              }
+
+              mat4.orthoZO(shadowCamera.projection,
+                shadowCamera.min[0], shadowCamera.max[0],
+                shadowCamera.min[1], shadowCamera.max[1],
+                shadowCamera.min[2], shadowCamera.max[2]);
+              mat4.invert(shadowCamera.inverseProjection, shadowCamera.projection);
+
+              shadowCamera.time[0] = time;
+              shadowCamera.zRange[0] = shadowCamera.min[2];
+              shadowCamera.zRange[1] = shadowCamera.max[2];
+            }
+
+            // Debugging visualization
+            for (const corner of shadowCamera.frustumCorners) {
+              WebGPUDebugPoint.addPoint(gpu, corner);
+            }
+            WebGPUDebugPoint.addPoint(gpu, shadowCamera.frustumCenter, [1, 0, 0, 1]);
+
+            gpu.device.queue.writeBuffer(shadowCamera.cameraBuffer, 0, shadowCamera.arrayBuffer);
+
+            const propertyOffset = i * 20 * Float32Array.BYTES_PER_ELEMENT;
+            const shadowViewport = new Float32Array(shadowProperties.buffer, propertyOffset, 4);
+            const viewProjMat = new Float32Array(shadowProperties.buffer, propertyOffset + 4 * Float32Array.BYTES_PER_ELEMENT, 16);
+
+            vec4.scale(shadowViewport, shadowCamera.viewport, 1.0/gpu.shadowAtlasSize);
+            mat4.multiply(viewProjMat, shadowCamera.projection, shadowCamera.view);
+          }
         } else {
+          // Standard directional shadow map
+          const transform = entity.get(Transform);
+          if (!transform) {
+            throw new Error('Shadow casting directional lights must have a transform to indicate where the shadow map' +
+              'originates. (Only the position will be considered.)');
+          }
+
+          let shadowCamera = this.#shadowCameraCache.get(directionalLight);
+          if (!shadowCamera || Array.isArray(shadowCamera)) {
+            shadowCamera = new WebGPUShadowCamera(gpu);
+            this.#shadowCameraCache.set(directionalLight, shadowCamera);
+          }
+
           const shadowAtlasRect = this.allocator.allocate(shadowMapSize);
           shadowCamera.updateRect(shadowAtlasRect);
+          frameShadowCameras.push(shadowCamera);
+
+          // Update the shadow camera's properties
+          transform.getWorldPosition(shadowCamera.position);
+          vec3.sub(tmpVec3, shadowCamera.position, directionalLight.direction);
+          mat4.lookAt(shadowCamera.view, shadowCamera.position, tmpVec3, shadowCaster.up);
+
+          mat4.orthoZO(shadowCamera.projection,
+            shadowCaster.width * -0.5, shadowCaster.width * 0.5,
+            shadowCaster.height * -0.5, shadowCaster.height * 0.5,
+            shadowCaster.zNear, shadowCaster.zFar);
+          mat4.invert(shadowCamera.inverseProjection, shadowCamera.projection);
+
+          shadowCamera.time[0] = time;
+          shadowCamera.zRange[0] = shadowCaster.zNear;
+          shadowCamera.zRange[1] = shadowCaster.zFar;
+
+          gpu.device.queue.writeBuffer(shadowCamera.cameraBuffer, 0, shadowCamera.arrayBuffer);
+
+          const propertyOffset = 0; // Directional light is always shadow index 0
+          const shadowViewport = new Float32Array(shadowProperties.buffer, propertyOffset, 4);
+          const viewProjMat = new Float32Array(shadowProperties.buffer, propertyOffset + 4 * Float32Array.BYTES_PER_ELEMENT, 16);
+
+          vec4.scale(shadowViewport, shadowCamera.viewport, 1.0/gpu.shadowAtlasSize);
+          mat4.multiply(viewProjMat, shadowCamera.projection, shadowCamera.view);
         }
-
-        frameShadowCameras.push(shadowCamera);
-
-        // Update the shadow camera's properties
-        const transform = entity.get(Transform);
-        if (!transform) {
-          throw new Error('Shadow casting directional lights must have a transform to indicate where the shadow map' +
-            'originates. (Only the position will be considered.)');
-        }
-
-        transform.getWorldPosition(shadowCamera.position);
-        vec3.sub(tmpVec3, shadowCamera.position, directionalLight.direction);
-        mat4.lookAt(shadowCamera.view, shadowCamera.position, tmpVec3, shadowCaster.up);
-
-        mat4.orthoZO(shadowCamera.projection,
-          shadowCaster.width * -0.5, shadowCaster.width * 0.5,
-          shadowCaster.height * -0.5, shadowCaster.height * 0.5,
-          shadowCaster.zNear, shadowCaster.zFar);
-        mat4.invert(shadowCamera.inverseProjection, shadowCamera.projection);
-
-        shadowCamera.time[0] = time;
-        shadowCamera.zRange[0] = shadowCaster.zNear;
-        shadowCamera.zRange[1] = shadowCaster.zFar;
-
-        gpu.device.queue.writeBuffer(shadowCamera.cameraBuffer, 0, shadowCamera.arrayBuffer);
-
-        const propertyOffset = 0; // Directional light is always shadow index 0
-        const shadowViewport = new Float32Array(shadowProperties.buffer, propertyOffset, 4);
-        const viewProjMat = new Float32Array(shadowProperties.buffer, propertyOffset + 4 * Float32Array.BYTES_PER_ELEMENT, 16);
-
-        vec4.scale(shadowViewport, shadowCamera.viewport, 1.0/gpu.shadowAtlasSize);
-        mat4.multiply(viewProjMat, shadowCamera.projection, shadowCamera.view);
 
         lightShadowTable[0] = 0; // Directional light is always considered light 0
+        lightShadowTable[1] = shadowCaster.cascades;
+        shadowIndex+=shadowCaster.cascades
       }
 
       const pointLight = entity.get(PointLight);
@@ -275,7 +405,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
 
         frameShadowCameras.push(...shadowCameras);
 
-        lightShadowTable[pointLight.lightIndex+1] = shadowIndex;
+        lightShadowTable[(pointLight.lightIndex+1)*2] = shadowIndex;
         shadowIndex+=6;
       }
     });

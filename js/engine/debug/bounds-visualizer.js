@@ -25,25 +25,25 @@ function createAABBMesh(gpu) {
   ]);
 
   const vertexBuffer = gpu.createStaticBuffer(boundsVerts, 'vertex');
-    const indexBuffer = gpu.createStaticBuffer(boundsIndices, 'index');
+  const indexBuffer = gpu.createStaticBuffer(boundsIndices, 'index');
 
-    const geometry = new Geometry({
-      drawCount: boundsIndices.length,
-      attributes: [ new Attribute('position', vertexBuffer) ],
-      indices: { buffer: indexBuffer, format: 'uint16' },
-      topology: 'line-list'
-    });
+  const geometry = new Geometry({
+    drawCount: boundsIndices.length,
+    attributes: [ new Attribute('position', vertexBuffer) ],
+    indices: { buffer: indexBuffer, format: 'uint16' },
+    topology: 'line-list'
+  });
 
-    const material = new UnlitMaterial();
-    material.baseColorFactor[0] = 1.0;
-    material.baseColorFactor[1] = 1.0;
-    material.baseColorFactor[2] = 0.0;
-    material.depthCompare = 'always';
+  const material = new UnlitMaterial();
+  material.baseColorFactor[0] = 1.0;
+  material.baseColorFactor[1] = 1.0;
+  material.baseColorFactor[2] = 0.0;
+  material.depthCompare = 'always';
 
-    const mesh = new Mesh({ geometry, material });
-    mesh.name = 'Bounding Volume AABB Visualization Mesh';
+  const mesh = new Mesh({ geometry, material });
+  mesh.name = 'Bounding Volume AABB Visualization Mesh';
 
-    return mesh;
+  return mesh;
 }
 
 function createSphereMesh(gpu) {

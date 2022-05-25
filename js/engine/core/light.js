@@ -55,6 +55,7 @@ export class ShadowCastingLight {
     this.width = options.width || 10;
     this.height = options.height || 10;
     this.up.set(options.up || [0, 1, 0]);
+    this.cascades = options.cascades || 0;
   }
 }
 
@@ -140,7 +141,7 @@ export class LightSystem extends System {
         pointLightByteOffset += 8 * Float32Array.BYTES_PER_ELEMENT;
 
         // Stop processing lights if we overflow our max
-        if (lightBuffer.lightCount == gpu.maxLightCount) { return false; } 
+        if (lightBuffer.lightCount == gpu.maxLightCount) { return false; }
       } else {
         light.lightIndex = -1;
       }

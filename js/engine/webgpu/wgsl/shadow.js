@@ -7,7 +7,7 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
   @group(${group}) @binding(5) var shadowSampler : sampler_comparison;
 
   struct LightShadowTable {
-    light : array<i32>
+    light : array<vec2<i32>>,
   };
   @group(${group}) @binding(6) var<storage, read> lightShadowTable : LightShadowTable;
 
@@ -46,10 +46,13 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
   @group(${group}) @binding(7) var<storage, read> shadow : LightShadows;
 
   fn dirLightVisibility(worldPos : vec3<f32>) -> f32 {
-    let shadowIndex = lightShadowTable.light[0u];
+    let shadowLookup = lightShadowTable.light[0u];
+    let shadowIndex = shadowLookup.x;
     if (shadowIndex == -1) {
       return 1.0; // Not a shadow casting light
     }
+
+    let cascadeCount = min(1, shadowLookup.y);
 
     let viewport = shadow.properties[shadowIndex].viewport;
     let lightPos = shadow.properties[shadowIndex].viewProj * vec4(worldPos, 1.0);
@@ -72,6 +75,7 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
         clamp(viewportPos + shadowSampleOffsets[i] * texelSize, clampRect.xy, clampRect.zw),
         shadowPos.z);
     }
+
     return visibility / f32(shadowSampleCount);
   }
 
@@ -100,7 +104,7 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
   }
 
   fn pointLightVisibility(lightIndex : u32, worldPos : vec3<f32>, pointToLight : vec3<f32>) -> f32 {
-    var shadowIndex = lightShadowTable.light[lightIndex+1u];
+    var shadowIndex = lightShadowTable.light[lightIndex+1u].x;
     if (shadowIndex == -1) {
       return 1.0; // Not a shadow casting light
     }

@@ -90,6 +90,8 @@ const appSettings = {
   showShadowMap: false,
   shadowDepthBias: 10,
   shadowDepthBiasSlopeScale: 8,
+  shadowMapResolution: 4096,
+  lockFrustum: false,
   enableBloom: true,
 
   sunAngle: 0.5,
@@ -114,7 +116,7 @@ const gltfLoader = new GltfLoader(renderer);
 
 const projection = new Camera();
 projection.zNear = 0.25;
-projection.zFar = 128;
+projection.zFar = 64;
 
 const camera = world.create(
   new Transform({ position: [0, 2, 10] }),
@@ -136,10 +138,16 @@ const sunDirectionalLight = new DirectionalLight({
   intensity: 7
 });
 
+const shadowCastingLight = new ShadowCastingLight({
+  width: 100, height: 60,
+  textureSize: appSettings.shadowMapResolution,
+  cascades: 4,
+});
+
 world.create(
   sunDirectionalLight,
   sunLightTransform,
-  new ShadowCastingLight({ width: 100, height: 60, textureSize: 4098 }),
+  shadowCastingLight,
   new AmbientLight(0.02, 0.02, 0.01),
 );
 
@@ -157,6 +165,12 @@ gui.add(appSettings, 'showShadowMap').onChange(() => {
   } else {
     world.removeSystem(WebGPUTextureDebugSystem);
   }
+});
+
+gui.add(appSettings, 'shadowMapResolution').options([
+  512, 1024, 2048, 4096, 8192
+]).onChange(() => {
+  shadowCastingLight.textureSize = appSettings.shadowMapResolution;
 });
 
 gui.add(appSettings, 'shadowDepthBias').onChange(() => {
@@ -189,6 +203,10 @@ gui.add(appSettings, 'enableBloom').onChange(() => {
     } else {
       world.removeSystem(WebGPUBloomSystem);
     }
+  });
+
+  gui.add(appSettings, 'lockFrustum').onChange(() => {
+    shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
   });
 
 function onFrame() {
