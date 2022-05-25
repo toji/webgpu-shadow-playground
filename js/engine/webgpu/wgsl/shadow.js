@@ -53,18 +53,17 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
 
   fn selectCascade(lightIndex : u32, worldPos : vec3<f32>) -> CascadeInfo {
     var cascade : CascadeInfo;
+    cascade.index = -1;
 
     let shadowLookup = lightShadowTable.light[0u];
     let shadowIndex = shadowLookup.x;
     if (shadowIndex == -1) {
-      cascade.index = -1;
       return cascade; // Not a shadow casting light
     }
 
     let cascadeCount = max(1, shadowLookup.y);
 
     for (var i = 0; i < cascadeCount; i = i + 1) {
-      cascade.index = i;
       cascade.viewport = shadow.properties[shadowIndex+i].viewport;
       let lightPos = shadow.properties[shadowIndex+i].viewProj * vec4(worldPos, 1.0);
 
@@ -75,11 +74,12 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
 
       // If the shadow falls outside the range covered by this cascade, skip it and try the next one up.
       if (all(cascade.shadowPos >= vec3(0.0,0.0,0.0)) && all(cascade.shadowPos <= vec3(1.0,1.0,1.0))) {
+        cascade.index = i;
         return cascade;
       }
     }
 
-    // If none of the cascades fit return the largest one anyway.
+    // None of the cascades fit.
     return cascade;
   }
 
