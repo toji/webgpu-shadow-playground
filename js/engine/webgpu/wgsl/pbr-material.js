@@ -201,6 +201,12 @@ export function PBRFragmentSource(layout, fullyRough, flags) { return wgsl`
 #endif
   };
 
+  var<private> cascadeColors : array<vec3<f32>, 3> = array<vec3<f32>, 3>(
+    vec3<f32>(1.0, 0.0, 0.0),
+    vec3<f32>(0.0, 1.0, 0.0),
+    vec3<f32>(0.0, 0.0, 1.0),
+  );
+
   @stage(fragment)
   fn fragmentMain(input : VertexOutput) -> FragmentOutput {
     let surface = GetSurfaceInfo(input);
@@ -218,6 +224,10 @@ export function PBRFragmentSource(layout, fullyRough, flags) { return wgsl`
 
 #if ${flags.shadowsEnabled}
       let lightVis = dirLightVisibility(input.worldPos);
+
+      // CSM Debugging
+      //let cascade = selectCascade(0u, input.worldPos);
+      //Lo = Lo + cascadeColors[cascade.index % 3];
 #else
       let lightVis = 1.0;
 #endif

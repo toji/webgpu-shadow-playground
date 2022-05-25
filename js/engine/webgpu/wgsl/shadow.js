@@ -45,27 +45,51 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
   };
   @group(${group}) @binding(7) var<storage, read> shadow : LightShadows;
 
-  fn dirLightVisibility(worldPos : vec3<f32>) -> f32 {
+  struct CascadeInfo {
+    index: i32,
+    viewport: vec4<f32>,
+    shadowPos: vec3<f32>,
+  };
+
+  fn selectCascade(lightIndex : u32, worldPos : vec3<f32>) -> CascadeInfo {
+    var cascade : CascadeInfo;
+
     let shadowLookup = lightShadowTable.light[0u];
     let shadowIndex = shadowLookup.x;
     if (shadowIndex == -1) {
-      return 1.0; // Not a shadow casting light
+      cascade.index = -1;
+      return cascade; // Not a shadow casting light
     }
 
-    let cascadeCount = min(1, shadowLookup.y);
+    let cascadeCount = max(1, shadowLookup.y);
 
-    let viewport = shadow.properties[shadowIndex].viewport;
-    let lightPos = shadow.properties[shadowIndex].viewProj * vec4(worldPos, 1.0);
+    for (var i = 0; i < cascadeCount; i = i + 1) {
+      cascade.index = i;
+      cascade.viewport = shadow.properties[shadowIndex+i].viewport;
+      let lightPos = shadow.properties[shadowIndex+i].viewProj * vec4(worldPos, 1.0);
 
-    // Put into texture coordinates
-    let shadowPos = vec3(
-      ((lightPos.xy / lightPos.w)) * vec2(0.5, -0.5) + vec2(0.5, 0.5),
-      lightPos.z / lightPos.w);
+      // Put into texture coordinates
+      cascade.shadowPos = vec3(
+        ((lightPos.xy / lightPos.w)) * vec2(0.5, -0.5) + vec2(0.5, 0.5),
+        lightPos.z / lightPos.w);
 
-    let viewportPos = vec2(viewport.xy + shadowPos.xy * viewport.zw);
+      // If the shadow falls outside the range covered by this cascade, skip it and try the next one up.
+      if (all(cascade.shadowPos >= vec3(0.0,0.0,0.0)) && all(cascade.shadowPos <= vec3(1.0,1.0,1.0))) {
+        return cascade;
+      }
+    }
+
+    // If none of the cascades fit return the largest one anyway.
+    return cascade;
+  }
+
+  fn dirLightVisibility(worldPos : vec3<f32>) -> f32 {
+    let cascade = selectCascade(0u, worldPos);
+
+    let viewportPos = vec2(cascade.viewport.xy + cascade.shadowPos.xy * cascade.viewport.zw);
 
     let texelSize = 1.0 / vec2<f32>(textureDimensions(shadowTexture, 0));
-    let clampRect = vec4(viewport.xy - texelSize, (viewport.xy+viewport.zw) + texelSize);
+    let clampRect = vec4(cascade.viewport.xy - texelSize, (cascade.viewport.xy+cascade.viewport.zw) + texelSize);
 
     // Percentage Closer Filtering
     var visibility = 0.0;
@@ -73,7 +97,7 @@ export function ShadowFunctions(group = 0, flags) { return wgsl`
       visibility = visibility + textureSampleCompareLevel(
         shadowTexture, shadowSampler,
         clamp(viewportPos + shadowSampleOffsets[i] * texelSize, clampRect.xy, clampRect.zw),
-        shadowPos.z);
+        cascade.shadowPos.z);
     }
 
     return visibility / f32(shadowSampleCount);

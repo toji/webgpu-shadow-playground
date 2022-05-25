@@ -264,7 +264,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
 
               // Adjust the zNear/Far to ensure we don't miss scene geometry that's not in the
               // frustum but still may casts shadows.
-              const zMult = 2.0;
+              const zMult = 3.0;
               if (shadowCamera.min[2] < 0) {
                 shadowCamera.min[2] *= zMult;
               } else {
@@ -288,10 +288,10 @@ export class WebGPUShadowSystem extends WebGPUSystem {
             }
 
             // Debugging visualization
-            for (const corner of shadowCamera.frustumCorners) {
+            /*for (const corner of shadowCamera.frustumCorners) {
               WebGPUDebugPoint.addPoint(gpu, corner);
             }
-            WebGPUDebugPoint.addPoint(gpu, shadowCamera.frustumCenter, [1, 0, 0, 1]);
+            WebGPUDebugPoint.addPoint(gpu, shadowCamera.frustumCenter, [1, 0, 0, 1]);*/
 
             gpu.device.queue.writeBuffer(shadowCamera.cameraBuffer, 0, shadowCamera.arrayBuffer);
 
