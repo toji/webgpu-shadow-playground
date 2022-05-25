@@ -86,11 +86,21 @@ import { vec3, quat } from 'gl-matrix';
 import dat from 'dat.gui';
 import Stats from 'stats.js';
 
+function setGuiEnabled(control, enabled) {
+  if (enabled) {
+    control.__li.style = "";
+  } else {
+    control.__li.style = "filter: grayscale(100%) blur(1px); pointer-events: none;";
+  }
+}
+
 const appSettings = {
   showShadowMap: false,
-  shadowDepthBias: 10,
-  shadowDepthBiasSlopeScale: 8,
+  depthBias: 5,
+  depthBiasSlopeScale: 5,
   shadowMapResolution: 4096,
+  cascadeCount: 3,
+  visualizeCascades: false,
   lockFrustum: false,
   enableBloom: true,
 
@@ -168,26 +178,36 @@ gui.add(appSettings, 'showShadowMap').onChange(() => {
 });
 
 gui.add(appSettings, 'shadowMapResolution').options([
-  512, 1024, 2048, 4096, 8192
+  512, 1024, 2048, 4096
 ]).onChange(() => {
   shadowCastingLight.textureSize = appSettings.shadowMapResolution;
 });
 
-gui.add(appSettings, 'shadowDepthBias').onChange(() => {
-  const shadowSettings = world.singleton.get(WebGPUShadowSettings);
-  shadowSettings.depthBias = appSettings.shadowDepthBias;
-  shadowSettings.updated = true;
-});
-
-gui.add(appSettings, 'shadowDepthBiasSlopeScale').onChange(() => {
-  const shadowSettings = world.singleton.get(WebGPUShadowSettings);
-  shadowSettings.depthBiasSlopeScale = appSettings.shadowDepthBiasSlopeScale;
-  shadowSettings.updated = true;
-});
-
 const shadowSettings = world.singleton.get(WebGPUShadowSettings);
-shadowSettings.depthBias = appSettings.shadowDepthBias;
-shadowSettings.depthBiasSlopeScale = appSettings.shadowDepthBiasSlopeScale;
+shadowSettings.depthBias = appSettings.depthBias;
+shadowSettings.depthBiasSlopeScale = appSettings.depthBiasSlopeScale;
+
+gui.add(appSettings, 'depthBias').onChange(() => {
+  shadowSettings.depthBias = appSettings.depthBias;
+  shadowSettings.updated = true;
+});
+
+gui.add(appSettings, 'depthBiasSlopeScale').onChange(() => {
+  shadowSettings.depthBiasSlopeScale = appSettings.depthBiasSlopeScale;
+  shadowSettings.updated = true;
+});
+
+const cascadeCount = gui.add(appSettings, 'cascadeCount').min(0).max(4).step(1).onChange(() => {
+  shadowCastingLight.cascades = appSettings.cascadeCount;
+});
+
+const visualizeCascades = gui.add(appSettings, 'visualizeCascades').onChange(() => {
+  shadowCastingLight.visualizeCascades = appSettings.visualizeCascades;
+});
+
+const lockFrustum = gui.add(appSettings, 'lockFrustum').onChange(() => {
+  shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
+});
 
 function updateSun() {
   sunLightTransform.position[0] = Math.sin(appSettings.sunAngle) * sunTransformDistance;
@@ -198,16 +218,12 @@ gui.add(appSettings, 'sunAngle').min(0).max(Math.PI * 2).step(0.01).onChange(upd
 updateSun();
 
 gui.add(appSettings, 'enableBloom').onChange(() => {
-    if (appSettings.enableBloom) {
-      world.registerRenderSystem(WebGPUBloomSystem);
-    } else {
-      world.removeSystem(WebGPUBloomSystem);
-    }
-  });
-
-  gui.add(appSettings, 'lockFrustum').onChange(() => {
-    shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
-  });
+  if (appSettings.enableBloom) {
+    world.registerRenderSystem(WebGPUBloomSystem);
+  } else {
+    world.removeSystem(WebGPUBloomSystem);
+  }
+});
 
 function onFrame() {
   requestAnimationFrame(onFrame);

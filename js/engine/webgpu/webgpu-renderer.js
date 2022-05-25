@@ -20,7 +20,7 @@ export class WebGPURenderer extends Renderer {
   #textureLoader = null;
 
   shadowAtlasSize = 8192;
-  shadowFormat = 'depth16unorm';
+  shadowFormat = 'depth16unorm'; //'depth32float';
 
   async init(canvas, flags) {
     this.flags = flags;

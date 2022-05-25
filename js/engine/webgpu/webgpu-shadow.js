@@ -182,7 +182,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
       if (directionalLight) {
         const shadowMapSize = shadowCaster.textureSize * gpu.flags.shadowResolutionMultiplier;
 
-        if (shadowCaster.cascades >= 0) {
+        if (shadowCaster.cascades > 0) {
           // Cascading shadow map
           let shadowCameras = this.#shadowCameraCache.get(directionalLight);
           if (!shadowCameras || !Array.isArray(shadowCameras) || shadowCameras.length != shadowCaster.cascades) {
@@ -271,7 +271,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
 
               // Adjust the zNear/Far to ensure we don't miss scene geometry that's not in the
               // frustum but still may casts shadows.
-              const zMult = 5.0;
+              const zMult = 7.0;
               if (shadowCamera.min[2] < 0) {
                 shadowCamera.min[2] *= zMult;
               } else {

@@ -60,17 +60,17 @@ class TextureAtlasNode {
     if (this.children) {
       throw new Error('Node is already split.');
     }
-    if((this.width - width) > (this.height - height)) {
-      // Horizontal split
-      this.children = [
-        new TextureAtlasNode(this.x, this.y, width, this.height, this),
-        new TextureAtlasNode(this.x+width, this.y, this.width - width, this.height, this)
-      ];
-    } else {
+    if((this.height - height) > (this.width - width)) {
       // Vertical split
       this.children = [
         new TextureAtlasNode(this.x, this.y, this.width, height, this),
         new TextureAtlasNode(this.x, this.y+height, this.width, this.height - height, this)
+      ];
+    } else {
+      // Horizontal split
+      this.children = [
+        new TextureAtlasNode(this.x, this.y, width, this.height, this),
+        new TextureAtlasNode(this.x+width, this.y, this.width - width, this.height, this)
       ];
     }
   }
@@ -116,7 +116,7 @@ export class TextureAtlasAllocator {
 
     node.split(width, height);
     return this.#findNodeToAllocate(node.children[0], width, height);
-  } 
+  }
 
   allocate(width, height) {
     let node = this.#findNodeToAllocate(this.#root, width, height || width);
