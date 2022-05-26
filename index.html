@@ -1,0 +1,238 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+
+    <!-- Valid until June 23, 2022-->
+    <meta http-equiv="origin-trial" content="AtHQISnXB5Y+0ffMLL3C/Zvf24IVI+s5kcP3wbueQbRvBKPpfHckADLzhuWAM4/K4aYBZQnSKIBAX4T8ZacOdQ4AAABOeyJvcmlnaW4iOiJodHRwczovL3RvamkuZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJHUFUiLCJleHBpcnkiOjE2NjM3MTgzOTl9">
+
+    <title>WebGPU Shadow Playground</title>
+
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        background-color: #000000;
+      }
+
+      canvas {
+        position: absolute;
+        z-index: 0;
+        height: 100%;
+        width: 100%;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        margin: 0;
+        touch-action: none;
+      }
+
+      .dg.main {
+        position: absolute;
+        z-index: 100;
+        top: 1em;
+        right: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "gl-matrix": "./node_modules/gl-matrix/esm/index.js",
+        "webgpu-texture-loader": "./node_modules/web-texture-tool/build/webgpu-texture-loader.js",
+        "wgsl-preprocessor": "./node_modules/wgsl-preprocessor/wgsl-preprocessor.js",
+        "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js",
+        "stats.js": "./node_modules/stats.js/src/Stats.js"
+      }
+    }
+    </script>
+
+    <script type="module">
+import { Transform } from './js/engine/core/transform.js';
+import { Camera } from './js/engine/core/camera.js';
+import { PointLight, AmbientLight, DirectionalLight, ShadowCastingLight } from './js/engine/core/light.js';
+import { Skybox } from './js/engine/core/skybox.js';
+import { Mesh } from './js/engine/core/mesh.js';
+import { BoundingVolume } from './js/engine/core/bounding-volume.js';
+
+import { GltfLoader } from './js/engine/loaders/gltf.js';
+
+import { FlyingControls, FlyingControlsSystem } from './js/engine/controls/flying-controls.js';
+
+import { BoneVisualizerSystem } from './js/engine/debug/bone-visualizer.js';
+import { BoundsVisualizerSystem } from './js/engine/debug/bounds-visualizer.js';
+
+import { WebGPUWorld } from './js/engine/webgpu/webgpu-world.js';
+
+import { BoxGeometry } from './js/engine/geometry/box.js';
+import { PBRMaterial, UnlitMaterial } from './js/engine/core/materials.js';
+import { WebGPULightSpriteSystem } from './js/engine/webgpu/webgpu-light-sprite.js';
+
+import { WebGPUTextureDebugSystem, WebGPUDebugTextureView } from './js/engine/webgpu/webgpu-texture-debug.js';
+import { WebGPUBloomSystem } from './js/engine/webgpu/webgpu-bloom.js';
+
+import { WebGPUShadowSettings } from './js/engine/webgpu/webgpu-shadow.js';
+
+import { vec3, quat } from 'gl-matrix';
+
+import dat from 'dat.gui';
+import Stats from 'stats.js';
+
+function setGuiEnabled(control, enabled) {
+  if (enabled) {
+    control.__li.style = "";
+  } else {
+    control.__li.style = "filter: grayscale(100%) blur(1px); pointer-events: none;";
+  }
+}
+
+const appSettings = {
+  showShadowMap: false,
+  depthBias: 5,
+  depthBiasSlopeScale: 5,
+  shadowMapResolution: 4096,
+  cascadeCount: 3,
+  visualizeCascades: false,
+  lockFrustum: false,
+  enableBloom: true,
+
+  sunAngle: 0.5,
+};
+
+let gui = new dat.GUI();
+
+document.body.appendChild(gui.domElement);
+
+const stats = new Stats();
+document.body.appendChild(stats.dom);
+
+const canvas = document.querySelector('canvas');
+
+const world = new WebGPUWorld(canvas);
+world
+  .registerSystem(FlyingControlsSystem)
+
+const renderer = await world.renderer();
+
+const gltfLoader = new GltfLoader(renderer);
+
+const projection = new Camera();
+projection.zNear = 0.25;
+projection.zFar = 64;
+
+const camera = world.create(
+  new Transform({ position: [0, 2, 10] }),
+  projection
+);
+
+const flyingControls = new FlyingControls();
+flyingControls.speed = 10;
+camera.add(flyingControls);
+
+// Add a skybox
+world.create(new Skybox(renderer.textureLoader.fromUrl('./media/textures/skybox/cube-basis-mipmap.ktx2')));
+
+const sunLightTransform = new Transform({ position: [0, 42, -42] });
+const sunTransformDistance = vec3.length(sunLightTransform.position);
+const sunDirectionalLight = new DirectionalLight({
+  direction: vec3.normalize(vec3.create(), sunLightTransform.position),
+  color: [1, 1, 0.4],
+  intensity: 7
+});
+
+const shadowCastingLight = new ShadowCastingLight({
+  width: 100, height: 60,
+  textureSize: appSettings.shadowMapResolution,
+  cascades: 3,
+});
+
+world.create(
+  sunDirectionalLight,
+  sunLightTransform,
+  shadowCastingLight,
+  new AmbientLight(0.02, 0.02, 0.01),
+);
+
+// Load a scene
+gltfLoader.instanceFromUrl(world, './media/models/city-set-draco.glb');
+
+gui.add(appSettings, 'showShadowMap').onChange(() => {
+  world.query(WebGPUDebugTextureView).forEach((entity) => {
+    entity.destroy();
+  });
+
+  if (appSettings.showShadowMap) {
+    world.registerRenderSystem(WebGPUTextureDebugSystem);
+    world.create(new WebGPUDebugTextureView(renderer.shadowDepthTexture.createView(), true));
+  } else {
+    world.removeSystem(WebGPUTextureDebugSystem);
+  }
+});
+
+gui.add(appSettings, 'shadowMapResolution').options([
+  512, 1024, 2048, 4096
+]).onChange(() => {
+  shadowCastingLight.textureSize = appSettings.shadowMapResolution;
+});
+
+const shadowSettings = world.singleton.get(WebGPUShadowSettings);
+shadowSettings.depthBias = appSettings.depthBias;
+shadowSettings.depthBiasSlopeScale = appSettings.depthBiasSlopeScale;
+
+gui.add(appSettings, 'depthBias').onChange(() => {
+  shadowSettings.depthBias = appSettings.depthBias;
+  shadowSettings.updated = true;
+});
+
+gui.add(appSettings, 'depthBiasSlopeScale').onChange(() => {
+  shadowSettings.depthBiasSlopeScale = appSettings.depthBiasSlopeScale;
+  shadowSettings.updated = true;
+});
+
+const cascadeCount = gui.add(appSettings, 'cascadeCount').min(0).max(4).step(1).onChange(() => {
+  shadowCastingLight.cascades = appSettings.cascadeCount;
+});
+
+const visualizeCascades = gui.add(appSettings, 'visualizeCascades').onChange(() => {
+  shadowCastingLight.visualizeCascades = appSettings.visualizeCascades;
+});
+
+const lockFrustum = gui.add(appSettings, 'lockFrustum').onChange(() => {
+  shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
+});
+
+function updateSun() {
+  sunLightTransform.position[0] = Math.sin(appSettings.sunAngle) * sunTransformDistance;
+  sunLightTransform.position[2] = Math.cos(appSettings.sunAngle) * sunTransformDistance;
+  vec3.normalize(sunDirectionalLight.direction, sunLightTransform.position);
+}
+gui.add(appSettings, 'sunAngle').min(0).max(Math.PI * 2).step(0.01).onChange(updateSun);
+updateSun();
+
+gui.add(appSettings, 'enableBloom').onChange(() => {
+  if (appSettings.enableBloom) {
+    world.registerRenderSystem(WebGPUBloomSystem);
+  } else {
+    world.removeSystem(WebGPUBloomSystem);
+  }
+});
+
+function onFrame() {
+  requestAnimationFrame(onFrame);
+
+  stats.begin();
+  world.execute();
+  stats.end();
+}
+requestAnimationFrame(onFrame);
+    </script>
+  </body>
+</html>
