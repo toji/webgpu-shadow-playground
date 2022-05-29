@@ -210,7 +210,7 @@ export class WebGPUShadowSystem extends WebGPUSystem {
             return false;
           });
 
-          const zSpan = (zFar - zNear)/shadowCaster.cascades;
+          //const zSpan = (zFar - zNear)/shadowCaster.cascades;
           const zRatio = zFar / zNear;
           const zPt = vec4.create();
 

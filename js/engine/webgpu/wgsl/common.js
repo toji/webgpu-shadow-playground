@@ -78,10 +78,10 @@ export function DefaultVertexInput(layout) {
       }
   });
 
-  inputs.push(`@location(${AttributeLocation.maxAttributeLocation}) instance0 : vec4<f32>,`);
-  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+1}) instance1 : vec4<f32>,`);
-  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+2}) instance2 : vec4<f32>,`);
-  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+3}) instance3 : vec4<f32>,`);
+  inputs.push(`@location(${AttributeLocation.maxAttributeLocation}) instanceMat0 : vec3<f32>,`);
+  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+1}) instanceMat1 : vec3<f32>,`);
+  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+2}) instanceMat2 : vec3<f32>,`);
+  inputs.push(`@location(${AttributeLocation.maxAttributeLocation+3}) instanceMat3 : vec3<f32>,`);
   inputs.push(`@location(${AttributeLocation.maxAttributeLocation+4}) instanceColor : vec4<f32>,`);
 
   return `struct VertexInput {
@@ -111,10 +111,10 @@ export function DefaultVertexOutput(layout) { return wgsl`
 export const GetInstanceMatrix = `
   fn getInstanceMatrix(input : VertexInput) -> mat4x4<f32> {
     return mat4x4(
-      input.instance0,
-      input.instance1,
-      input.instance2,
-      input.instance3
+      vec4(input.instanceMat0, 0.0),
+      vec4(input.instanceMat1, 0.0),
+      vec4(input.instanceMat2, 0.0),
+      vec4(input.instanceMat3, 1.0)
     );
   }
 `;
