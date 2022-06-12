@@ -2,6 +2,7 @@ import { System } from './ecs.js';
 import { Stage } from './stage.js';
 import { Transform } from './transform.js';
 import { InstanceColor } from './instance-color.js';
+import { GeometryLayoutCache } from './geometry-layout.js';
 
 export const AttributeLocation = {
   position: 0,
@@ -58,63 +59,6 @@ const DefaultStride = {
   sint32x3: 12,
   sint32x4: 16,
 };
-
-class GeometryLayoutCache {
-  #nextId = 1;
-  #keyMap = new Map(); // Map of the given key to an ID
-  #cache = new Map();  // Map of ID to cached resource
-
-  getLayout(id) {
-    return this.#cache.get(id);
-  }
-
-  createLayout(attribBuffers, topology, indexFormat = 'uint32') {
-    const buffers = [];
-    const locationsUsed = [];
-    for (const buffer of attribBuffers) {
-      const attributes = [];
-      for (const attrib of buffer.attributes) {
-        // Exact offset will be handled when setting the buffer.
-        const offset = attrib.offset - buffer.minOffset
-        attributes.push({
-          shaderLocation: attrib.shaderLocation,
-          format: attrib.format,
-          offset,
-        });
-        locationsUsed.push(attrib.shaderLocation);
-      }
-
-      buffers.push({
-        arrayStride: buffer.arrayStride,
-        attributes
-      });
-    }
-
-    const primitive = { topology };
-    switch(topology) {
-      case 'triangle-strip':
-      case 'line-strip':
-        primitive.stripIndexFormat = indexFormat;
-    }
-
-    const layout = {
-      buffers,
-      primitive,
-    };
-
-    layout.key = JSON.stringify(layout);
-    layout.id = this.#keyMap.get(layout.key);
-    layout.locationsUsed = locationsUsed;
-
-    if (layout.id === undefined) {
-      layout.id = this.#nextId++;
-      this.#keyMap.set(layout.key, layout.id);
-      this.#cache.set(layout.id, layout);
-    }
-
-    return layout;
-  }
-}
 
 const LAYOUT_CACHE = new GeometryLayoutCache();
 
@@ -230,6 +174,7 @@ export class Mesh {
       if (!primitive.geometry || !primitive.material) {
         throw new Error('Primitive specified for mesh that lacks geometry or material');
       }
+      primitive.meshPipelineId = `${primitive.geometry.layoutId},${primitive.material.materialId}`;
     }
     this.primitives.push(...primitives);
   }
