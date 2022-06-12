@@ -45,7 +45,7 @@ export const BloomBlurHorizontalFragmentSource = `
 let bloomDir = vec2(1.0, 0.0);
 ${BloomBlurCommon}
 
-@stage(fragment)
+@fragment
 fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
   return getGaussianBlur(input.texCoord);
 }
@@ -58,7 +58,7 @@ ${BloomBlurCommon}
 
 @group(0) @binding(3) var prevTexture : texture_2d<f32>;
 
-@stage(fragment)
+@fragment
 fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
   let blurColor = getGaussianBlur(input.texCoord);
   let dimColor = textureSample(prevTexture, bloomSampler, input.texCoord) * bloom.dim;
@@ -75,7 +75,7 @@ struct FragmentInput {
   @location(0) texCoord : vec2<f32>
 };
 
-@stage(fragment)
+@fragment
 fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
   let color = textureSample(bloomTexture, bloomSampler, input.texCoord);
   return vec4(color.rgb, 1.0);

@@ -95,7 +95,7 @@ export const ClusterBoundsSource = `
   let tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
   let eyePos = vec3(0.0);
 
-  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     let tileIndex : u32 = global_id.x +
                           global_id.y * tileCount.x +
@@ -150,7 +150,7 @@ export const ClusterLightsSource = `
     return sqDist;
   }
 
-  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     let tileIndex = global_id.x +
                     global_id.y * tileCount.x +

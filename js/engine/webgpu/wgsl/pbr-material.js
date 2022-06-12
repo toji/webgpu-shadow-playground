@@ -207,7 +207,7 @@ export function PBRFragmentSource(layout, fullyRough, flags) { return wgsl`
     vec3<f32>(0.0, 0.0, 1.0),
   );
 
-  @stage(fragment)
+  @fragment
   fn fragmentMain(input : VertexOutput) -> FragmentOutput {
     let surface = GetSurfaceInfo(input);
 
