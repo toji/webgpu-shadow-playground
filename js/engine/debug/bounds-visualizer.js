@@ -2,11 +2,12 @@ import { System } from '../core/ecs.js';
 import { Stage } from '../core/stage.js';
 import { Mesh, Geometry, Attribute } from '../core/mesh.js';
 import { BoundingVolume, BoundingVolumeType } from '../core/bounding-volume.js';
+import { BVH } from '../util/bvh.js';
 import { UnlitMaterial } from '../core/materials.js';
 import { Transform, StaticTransform } from '../core/transform.js';
 import { vec3 } from 'gl-matrix';
 
-function createAABBMesh(gpu) {
+function createAABBGeometry(gpu) {
   const boundsVerts = new Float32Array([
     1.0,  1.0,  1.0, // 0
     0.0,  1.0,  1.0, // 1
@@ -33,6 +34,12 @@ function createAABBMesh(gpu) {
     indices: { buffer: indexBuffer, format: 'uint16' },
     topology: 'line-list'
   });
+
+  return geometry;
+}
+
+function createAABBMesh(gpu) {
+  const geometry = createAABBGeometry(gpu);
 
   const material = new UnlitMaterial();
   material.baseColorFactor[0] = 1.0;
@@ -87,6 +94,7 @@ function createSphereMesh(gpu) {
   material.baseColorFactor[1] = 1.0;
   material.baseColorFactor[2] = 0.0;
   material.depthCompare = 'always';
+  material.castsShadow = false;
 
   const mesh = new Mesh({ geometry, material });
   mesh.name = 'Bounding Volume Sphere Visualization Mesh';
@@ -99,13 +107,26 @@ export class BoundsVisualizerSystem extends System {
 
   init(gpu) {
     this.aabbMesh = createAABBMesh(gpu);
+
+    const material = new UnlitMaterial();
+    material.baseColorFactor[0] = 0.0;
+    material.baseColorFactor[1] = 0.3;
+    material.baseColorFactor[2] = 1.0;
+    material.depthCompare = 'always';
+    material.castsShadow = false;
+
+    this.aabbLeafMesh = new Mesh({
+      geometry: createAABBGeometry(gpu),
+      material });
+    this.aabbLeafMesh.name = 'Bounding Volume AABB Leaf Visualization Mesh';
+
     this.sphereMesh = createSphereMesh(gpu);
   }
 
   execute(delta, time, gpu) {
     const scale = vec3.create();
 
-    this.query(BoundingVolume).forEach((entity, bounds) => {
+    /*this.query(BoundingVolume).forEach((entity, bounds) => {
       const transform = entity.get(Transform);
 
       switch(bounds.type) {
@@ -125,6 +146,28 @@ export class BoundsVisualizerSystem extends System {
           }, transform?.worldMatrix));
           break;
       }
+    });*/
+
+    this.query(BVH).forEach((entity, bvh) => {
+      const transform = entity.get(Transform);
+
+      const addNodeMesh = (node, level) => {
+        if (!node) { return; }
+
+        if (bvh.visLevel == 0 || bvh.visLevel >= level || Math.abs(bvh.visLevel) == level) {
+          vec3.subtract(scale, node.max, node.min);
+          const leaf = !node.child0;
+          gpu.addFrameMeshInstance(leaf ? this.aabbLeafMesh : this.aabbMesh,
+            new StaticTransform({
+              position: node.min,
+              scale
+            }, transform?.worldMatrix));
+        }
+        addNodeMesh(node.child0, level+1);
+        addNodeMesh(node.child1, level+1);
+      };
+
+      addNodeMesh(bvh.rootNode, 0);
     });
   }
 }
