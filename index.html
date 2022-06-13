@@ -81,6 +81,8 @@ import { WebGPUBloomSystem } from './js/engine/webgpu/webgpu-bloom.js';
 
 import { WebGPUShadowSettings } from './js/engine/webgpu/webgpu-shadow.js';
 
+import { BVH } from './js/engine/util/bvh.js';
+
 import { vec3, quat } from 'gl-matrix';
 
 import dat from 'dat.gui';
@@ -103,6 +105,8 @@ const appSettings = {
   visualizeCascades: false,
   lockFrustum: false,
   enableBloom: true,
+  visualizeBVH: false,
+  bvhVisLevel: 0,
 
   sunAngle: 0.5,
 };
@@ -118,19 +122,22 @@ const canvas = document.querySelector('canvas');
 
 const world = new WebGPUWorld(canvas);
 world
-  .registerSystem(FlyingControlsSystem)
+  .registerSystem(FlyingControlsSystem);
 
 const renderer = await world.renderer();
 
 const gltfLoader = new GltfLoader(renderer);
 
+const bvh = new BVH();
+
 const projection = new Camera();
 projection.zNear = 0.25;
-projection.zFar = 64;
+projection.zFar = 128;
 
 const camera = world.create(
   new Transform({ position: [0, 2, 10] }),
-  projection
+  projection,
+  bvh
 );
 
 const flyingControls = new FlyingControls();
@@ -144,7 +151,7 @@ const sunLightTransform = new Transform({ position: [0, 42, -42] });
 const sunTransformDistance = vec3.length(sunLightTransform.position);
 const sunDirectionalLight = new DirectionalLight({
   direction: vec3.normalize(vec3.create(), sunLightTransform.position),
-  color: [1, 1, 0.4],
+  color: [1, 1, 0.8],
   intensity: 7
 });
 
@@ -162,7 +169,24 @@ world.create(
 );
 
 // Load a scene
-gltfLoader.instanceFromUrl(world, './media/models/city-set-draco.glb');
+//gltfLoader.instanceFromUrl(world, './media/models/city-set-draco.glb', bvh);
+
+gltfLoader.instanceFromUrl(world, './media/models/new_sponza.glb', bvh);
+gltfLoader.instanceFromUrl(world, './media/models/new_sponza_ivy.glb', bvh);
+gltfLoader.instanceFromUrl(world, './media/models/new_sponza_curtains.glb', bvh);
+//gltfLoader.instanceFromUrl(world, './media/models/new_sponza_candles.glb', bvh);
+
+/*gltfLoader.fromUrl('./media/models/huge-battle-draco.glb').then(scene => {
+      const gltfInstance = scene.createInstance(world, bvh);
+      const transform = gltfInstance.get(Transform);
+      transform.scale[0] = 150;
+      transform.scale[1] = 150;
+      transform.scale[2] = 150;
+
+      world.create(bvh, new Transform({ scale: transform.scale }));
+});*/
+
+world.create();
 
 gui.add(appSettings, 'showShadowMap').onChange(() => {
   world.query(WebGPUDebugTextureView).forEach((entity) => {
@@ -197,16 +221,29 @@ gui.add(appSettings, 'depthBiasSlopeScale').onChange(() => {
   shadowSettings.updated = true;
 });
 
-const cascadeCount = gui.add(appSettings, 'cascadeCount').min(0).max(4).step(1).onChange(() => {
+gui.add(appSettings, 'cascadeCount').min(0).max(4).step(1).onChange(() => {
   shadowCastingLight.cascades = appSettings.cascadeCount;
 });
 
-const visualizeCascades = gui.add(appSettings, 'visualizeCascades').onChange(() => {
+gui.add(appSettings, 'visualizeCascades').onChange(() => {
   shadowCastingLight.visualizeCascades = appSettings.visualizeCascades;
 });
 
-const lockFrustum = gui.add(appSettings, 'lockFrustum').onChange(() => {
+gui.add(appSettings, 'visualizeBVH').onChange(() => {
+  if (appSettings.visualizeBVH) {
+    world.registerRenderSystem(BoundsVisualizerSystem);
+  } else {
+    world.removeSystem(BoundsVisualizerSystem);
+  }
+});
+
+gui.add(appSettings, 'bvhVisLevel').min(-25).max(25).step(1).onChange(() => {
+  bvh.visLevel = appSettings.bvhVisLevel;
+});
+
+gui.add(appSettings, 'lockFrustum').onChange(() => {
   shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
+  projection.lockCullingFrustum = appSettings.lockFrustum;
 });
 
 function updateSun() {

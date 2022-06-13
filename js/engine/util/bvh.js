@@ -3,7 +3,7 @@
 // Lots of this based on Erin Catto's great doc on dynamic BVHs:
 // https://box2d.org/files/ErinCatto_DynamicBVH_Full.pdf
 
-import { vec3 } from 'gl-matrix';
+import { vec3, vec4 } from 'gl-matrix';
 
 const tmpVec3 = vec3.create();
 
@@ -11,6 +11,55 @@ const tmpBounds = [
   vec3.create(), vec3.create(), vec3.create(), vec3.create(),
   vec3.create(), vec3.create(), vec3.create(), vec3.create()
 ];
+
+const tmpVec4 = vec4.create();
+
+export class Frustum {
+  constructor(mat) {
+    this.planes = [
+      // Left clipping plane
+      vec4.fromValues(mat[3] + mat[0],
+                      mat[7] + mat[4],
+                      mat[11] + mat[8],
+                      mat[15] + mat[12]),
+      // Right clipping plane
+      vec4.fromValues(mat[3] - mat[0],
+                      mat[7] - mat[4],
+                      mat[11] - mat[8],
+                      mat[15] - mat[12]),
+      // Top clipping plane
+      vec4.fromValues(mat[3] - mat[1],
+                      mat[7] - mat[5],
+                      mat[11] - mat[9],
+                      mat[15] - mat[13]),
+      // Bottom clipping plane
+      vec4.fromValues(mat[3] + mat[1],
+                      mat[7] + mat[5],
+                      mat[11] + mat[9],
+                      mat[15] + mat[13]),
+      // Near clipping plane
+      vec4.fromValues(mat[2],
+                      mat[6],
+                      mat[10],
+                      mat[14]),
+      // Far clipping plane
+      vec4.fromValues(mat[3] - mat[2],
+                      mat[7] - mat[6],
+                      mat[11] - mat[10],
+                      mat[15] - mat[14]),
+    ];
+  }
+
+  containsPoint(x, y, z) {
+    vec4.set(tmpVec4, x, y, z, 1.0);
+    for (let i = 0; i < 6; ++i) {
+      if (vec4.dot(this.planes[i], tmpVec4) < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
 
 export class AABB {
   min = vec3.create();
@@ -59,6 +108,27 @@ export class AABB {
       vec3.min(this.min, this.min, tmpBounds[i]);
       vec3.max(this.max, this.max, tmpBounds[i]);
     }
+  }
+
+  // Tests this AABB against a plane (vec4). Returns:
+  //  * 1 if it's fully on on the positive side of the plane
+  //  * 0 if it intersects the plane
+  //  * -1 if it's fully on the negative side of the plane
+  testPlane(plane) {
+    let h = vec4.dot(plane, [this.min[0], this.min[1], this.min[2], 1.0]) >= 0 ? 1 : -1;
+        h += vec4.dot(plane, [this.max[0], this.max[1], this.max[2], 1.0]) >= 0 ? 1 : -1;
+
+    if (h == 0) { return 0; }
+
+    h += vec4.dot(plane, [this.min[0], this.min[1], this.max[2], 1.0]) >= 0 ? 1 : -1;
+    h += vec4.dot(plane, [this.min[0], this.max[1], this.min[2], 1.0]) >= 0 ? 1 : -1;
+    h += vec4.dot(plane, [this.min[0], this.max[1], this.max[2], 1.0]) >= 0 ? 1 : -1;
+    h += vec4.dot(plane, [this.max[0], this.min[1], this.min[2], 1.0]) >= 0 ? 1 : -1;
+    h += vec4.dot(plane, [this.max[0], this.min[1], this.max[2], 1.0]) >= 0 ? 1 : -1;
+    h += vec4.dot(plane, [this.max[0], this.max[1], this.min[2], 1.0]) >= 0 ? 1 : -1;
+
+    if (Math.abs(h) != 8) { return 0; }
+    return h > 0 ? 1 : -1;
   }
 }
 
@@ -160,5 +230,53 @@ export class BVH {
       parentNode.union(parentNode.child0, parentNode.child1);
       parentNode = parentNode.parent;
     }
+  }
+
+  forEachVisible(frustum, callback) {
+    const allPlanes = 0x3F; // Bits flipped for all six planes
+    if (!this.#rootNode) { return; }
+
+    const isVisible = (node) => {
+      if (!node.child0) {
+        // For each visible leaf node, call the callback.
+        callback(node.value);
+      } else {
+        isVisible(node.child0);
+        isVisible(node.child1);
+      }
+    };
+
+    if (!frustum) {
+      isVisible(this.#rootNode);
+      return;
+    }
+
+    const checkNode = (frustum, node, planeMask = allPlanes) => {
+      for (let index in frustum.planes) {
+        const planeBit = 0x01 << index;
+        if (planeBit & planeMask) {
+          const nodeResult = node.testPlane(frustum.planes[index]);
+          if (nodeResult == -1) {
+              // Node AABB is entirely outside the plane and can be discarded.
+              return;
+          } else if (nodeResult == 1) {
+              // Node is fully on the inside of the plane so none of it's children will need to be
+              // tested against it again.
+              planeMask &= ~planeBit;
+          }
+        }
+      }
+
+      if (planeMask == 0 || !node.child0) {
+        // Node is fully contained within the frustum or is a leaf node that hasn't been discarded,
+        // mark it as visible.
+        isVisible(node);
+      } else {
+        checkNode(frustum, node.child0, planeMask);
+        checkNode(frustum, node.child1, planeMask);
+      }
+    };
+
+    checkNode(frustum, this.#rootNode);
   }
 }

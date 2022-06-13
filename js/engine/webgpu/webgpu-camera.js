@@ -4,6 +4,7 @@ import { mat4, vec3 } from 'gl-matrix';
 
 import { Transform } from '../core/transform.js';
 import { Camera } from '../core/camera.js';
+import { Frustum } from '../util/bvh.js';
 import { LightBuffer } from '../core/light.js';
 
 import { CAMERA_BUFFER_SIZE } from './wgsl/common.js';
@@ -104,6 +105,8 @@ export class WebGPUCamera extends WebGPUCameraBase {
   }
 }
 
+const tmpMat4 = mat4.create();
+
 export class WebGPUCameraSystem extends WebGPUSystem {
   stage = Stage.PreRender;
   execute(delta, time, gpu) {
@@ -135,6 +138,11 @@ export class WebGPUCameraSystem extends WebGPUSystem {
       mat4.perspectiveZO(gpuCamera.projection, camera.fieldOfView, aspect,
         camera.zNear, camera.zFar);
       mat4.invert(gpuCamera.inverseProjection, gpuCamera.projection);
+
+      if (!camera.lockCullingFrustum) {
+        mat4.multiply(tmpMat4, gpuCamera.projection, gpuCamera.view);
+        camera.frustum = new Frustum(tmpMat4);
+      }
 
       gpuCamera.time[0] = time;
       gpuCamera.outputSize[0] = gpu.renderTargets.size.width;

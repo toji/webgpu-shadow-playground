@@ -4,6 +4,9 @@ import { Transform } from './transform.js';
 import { InstanceColor } from './instance-color.js';
 import { GeometryLayoutCache } from './geometry-layout.js';
 
+import { Camera } from '../core/camera.js';
+import { BVH } from '../util/bvh.js';
+
 export const AttributeLocation = {
   position: 0,
   normal: 1,
@@ -188,9 +191,19 @@ export class MeshSystem extends System {
   }
 
   execute(delta, time, gpu) {
-    // TODO: This would be a perfect place for some frustum culling, etc.
-    this.meshQuery.forEach((entity, mesh) => {
-      gpu.addFrameMeshInstance(mesh, entity.get(Transform), entity.get(InstanceColor));
+    /*this.meshQuery.forEach((entity) => {
+      entity.add(new InstanceColor([1.0, 0.0, 0.0]));
+    });*/
+
+    this.query(Camera, BVH).forEach((e, camera, bvh) => {
+      bvh.forEachVisible(camera.frustum, (entity) => {
+        gpu.addFrameMeshInstance(entity.get(Mesh), entity.get(Transform), entity.get(InstanceColor));
+      });
     });
+
+    // TODO: This would be a perfect place for some frustum culling, etc.
+    /*this.meshQuery.forEach((entity, mesh) => {
+      gpu.addFrameMeshInstance(mesh, entity.get(Transform), entity.get(InstanceColor));
+    });*/
   }
 }
