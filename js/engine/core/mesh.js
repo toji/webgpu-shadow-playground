@@ -191,19 +191,15 @@ export class MeshSystem extends System {
   }
 
   execute(delta, time, gpu) {
-    /*this.meshQuery.forEach((entity) => {
-      entity.add(new InstanceColor([1.0, 0.0, 0.0]));
-    });*/
-
-    this.query(Camera, BVH).forEach((e, camera, bvh) => {
+    /*this.query(Camera, BVH).forEach((e, camera, bvh) => {
       bvh.forEachVisible(camera.frustum, (entity) => {
         gpu.addFrameMeshInstance(entity.get(Mesh), entity.get(Transform), entity.get(InstanceColor));
       });
-    });
+    });*/
 
     // TODO: This would be a perfect place for some frustum culling, etc.
-    /*this.meshQuery.forEach((entity, mesh) => {
+    this.meshQuery.forEach((entity, mesh) => {
       gpu.addFrameMeshInstance(mesh, entity.get(Transform), entity.get(InstanceColor));
-    });*/
+    });
   }
 }

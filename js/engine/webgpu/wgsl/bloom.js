@@ -42,7 +42,7 @@ fn getGaussianBlur(texCoord : vec2<f32>) -> vec4<f32> {
 `;
 
 export const BloomBlurHorizontalFragmentSource = `
-let bloomDir = vec2(1.0, 0.0);
+const bloomDir = vec2(1.0, 0.0);
 ${BloomBlurCommon}
 
 @fragment
@@ -53,7 +53,7 @@ fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
 
 // Combines the vertical blur step and a dimming of the previous blur results to allow for glowing trails.
 export const BloomBlurVerticalFragmentSource = `
-let bloomDir = vec2(0.0, 1.0);
+const bloomDir = vec2(0.0, 1.0);
 ${BloomBlurCommon}
 
 @group(0) @binding(3) var prevTexture : texture_2d<f32>;

@@ -232,6 +232,8 @@ export class BVH {
     }
   }
 
+  // Credit to https://cesium.com/blog/2015/08/04/fast-hierarchical-culling/ for introducing me to
+  // the plane masking technique.
   forEachVisible(frustum, callback) {
     const allPlanes = 0x3F; // Bits flipped for all six planes
     if (!this.#rootNode) { return; }

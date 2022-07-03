@@ -91,11 +91,11 @@ function PBRSurfaceInfo(layout) { return wgsl`
 // Much of the shader used here was pulled from https://learnopengl.com/PBR/Lighting
 // Thanks!
 function PBRFunctions(fullyRough) { return wgsl`
-let PI = 3.14159265359;
+const PI = ${Math.PI};
 
-let LightType_Point = 0u;
-let LightType_Spot = 1u;
-let LightType_Directional = 2u;
+const LightType_Point = 0u;
+const LightType_Spot = 1u;
+const LightType_Directional = 2u;
 
 struct PuctualLight {
   lightType : u32,
