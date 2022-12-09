@@ -4,7 +4,7 @@ import { CameraStruct, LightStruct, ColorConversions, DefaultVertexOutput } from
 import { ClusterLightsStruct, TileFunctions } from './clustered-light.js';
 import { ShadowFunctions } from './shadow.js';
 
-export const MATERIAL_BUFFER_SIZE = 11 * Float32Array.BYTES_PER_ELEMENT;
+export const MATERIAL_BUFFER_SIZE = 12 * Float32Array.BYTES_PER_ELEMENT; // Must be a multiple of 16 bytes
 export function MaterialStruct(group = 1) { return `
   struct Material {
     baseColorFactor : vec4<f32>,
@@ -91,11 +91,11 @@ function PBRSurfaceInfo(layout) { return wgsl`
 // Much of the shader used here was pulled from https://learnopengl.com/PBR/Lighting
 // Thanks!
 function PBRFunctions(fullyRough) { return wgsl`
-let PI = 3.14159265359;
+const PI = 3.14159265359;
 
-let LightType_Point = 0u;
-let LightType_Spot = 1u;
-let LightType_Directional = 2u;
+const LightType_Point = 0u;
+const LightType_Spot = 1u;
+const LightType_Directional = 2u;
 
 struct PuctualLight {
   lightType : u32,

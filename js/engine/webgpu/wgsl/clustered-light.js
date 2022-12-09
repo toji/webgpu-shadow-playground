@@ -45,7 +45,7 @@ export function ClusterLightsStruct(group=0, binding=2, access='read') { return 
 }
 
 export const TileFunctions = `
-let tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
+const tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
 
 fn linearDepth(depthSample : f32) -> f32 {
   return camera.zFar * camera.zNear / fma(depthSample, camera.zNear-camera.zFar, camera.zFar);
@@ -72,7 +72,7 @@ fn getClusterIndex(fragCoord : vec4<f32>) -> u32 {
 
 export const ClusterBoundsSource = `
   ${CameraStruct(0, 0)}
-  ${ClusterStruct(1, 0, 'write')}
+  ${ClusterStruct(1, 0, 'read_write')}
 
   fn lineIntersectionToZPlane(a : vec3<f32>, b : vec3<f32>, zDistance : f32) -> vec3<f32> {
     let normal = vec3(0.0, 0.0, 1.0);
@@ -92,8 +92,8 @@ export const ClusterBoundsSource = `
     return clipToView(clip);
   }
 
-  let tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
-  let eyePos = vec3(0.0);
+  const tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
+  const eyePos = vec3(0.0);
 
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
