@@ -7,6 +7,7 @@ import { UnlitMaterial, PBRMaterial } from '../core/materials.js';
 import { PointLight } from '../core/light.js';
 import { mat4, vec3 } from 'gl-matrix';
 import { Skin } from '../core/skin.js';
+import { AABB } from '../util/bvh.js';
 import {
   LinearAnimationSampler,
   SphericalLinearAnimationSampler,
@@ -328,7 +329,7 @@ export class GltfScene {
   animations;
   boundingVolume;
 
-  #createNodeInstance(nodeIndex, world, transforms, group) {
+  #createNodeInstance(nodeIndex, world, transforms, group, bvh) {
     const node = this.nodes[nodeIndex];
     const transform = transforms.getTransform(nodeIndex);
 
@@ -351,6 +352,13 @@ export class GltfScene {
 
       const nodeEntity = world.create(transform, mesh, boundingVolume);
       nodeEntity.name = node.name;
+
+      if (bvh) {
+        const aabb = new AABB(boundingVolume);
+        aabb.transform(transform?.worldMatrix);
+        bvh.insert(aabb, nodeEntity);
+      }
+
       group.entities.push(nodeEntity);
     }
 
@@ -363,12 +371,12 @@ export class GltfScene {
     if (node.children) {
       for (const child of node.children) {
         transform.addChild(transforms.getTransform(child));
-        this.#createNodeInstance(child, world, transforms, group);
+        this.#createNodeInstance(child, world, transforms, group, bvh);
       }
     }
   }
 
-  addInstanceToEntity(world, entity) {
+  addInstanceToEntity(world, entity, bvh) {
     const group = new EntityGroup();
     const instanceTransforms = this.nodeTransforms.clone();
     let sceneTransform = entity.get(Transform);
@@ -377,16 +385,16 @@ export class GltfScene {
       entity.add(sceneTransform);
     }
     for (const nodeIndex of this.scene.nodes) {
-      this.#createNodeInstance(nodeIndex, world, instanceTransforms, group);
+      this.#createNodeInstance(nodeIndex, world, instanceTransforms, group, bvh);
       sceneTransform.addChild(instanceTransforms.getTransform(nodeIndex));
     }
     entity.add(sceneTransform, instanceTransforms, this.boundingVolume, group);
     return entity;
   }
 
-  createInstance(world) {
+  createInstance(world, bvh) {
     const entity = world.create();
-    return this.addInstanceToEntity(world, entity);
+    return this.addInstanceToEntity(world, entity, bvh);
   }
 
   getMeshByName(name) {
@@ -445,10 +453,10 @@ export class GltfLoader {
     });
   }
 
-  instanceFromUrl(world, url) {
+  instanceFromUrl(world, url, bvh) {
     const entity = world.create(new Transform());
     const scene = this.fromUrl(url).then((scene) => {
-      scene.addInstanceToEntity(world, entity);
+      scene.addInstanceToEntity(world, entity, bvh);
     });
     return entity;
   }

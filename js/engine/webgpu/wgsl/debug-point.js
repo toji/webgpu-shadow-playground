@@ -28,7 +28,7 @@ export const DebugPointVertexSource = `
     @location(1) color: vec4<f32>,
   };
 
-  @stage(vertex)
+  @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
 
@@ -64,7 +64,7 @@ export const DebugPointFragmentSource = `
     @location(1) color: vec4<f32>,
   };
 
-  @stage(fragment)
+  @fragment
   fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
     let distToCenter = length(input.localPos * ${(1/SIZE).toFixed(2)});
     let fade = (1.0 - distToCenter) * (1.0 / (distToCenter * distToCenter * distToCenter));
