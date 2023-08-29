@@ -12,6 +12,7 @@
         "gl-matrix": "^3.4.3",
         "matter-js": "^0.17.1",
         "stats.js": "^0.17.0",
+        "update": "^0.7.4",
         "web-texture-tool": "github:toji/web-texture-tool",
         "wgsl-preprocessor": "^1.0.0"
     }
