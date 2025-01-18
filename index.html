@@ -103,6 +103,7 @@ const appSettings = {
   visualizeCascades: false,
   lockFrustum: false,
   enableBloom: true,
+  shadowFiltering: true,
 
   sunAngle: 0.5,
 };
@@ -207,6 +208,10 @@ const visualizeCascades = gui.add(appSettings, 'visualizeCascades').onChange(() 
 
 const lockFrustum = gui.add(appSettings, 'lockFrustum').onChange(() => {
   shadowSettings.lockCascadeFrustum = appSettings.lockFrustum;
+});
+
+const shadowFiltering = gui.add(appSettings, 'shadowFiltering').onChange(() => {
+  renderer.flags.shadowFiltering = appSettings.shadowFiltering;
 });
 
 function updateSun() {

@@ -101,6 +101,35 @@ export class WebGPUCamera extends WebGPUCameraBase {
         resource: { buffer: gpu.shadowPropertiesBuffer, },
       }],
     });
+
+    this.bindGroupUnfilteredShadow = gpu.device.createBindGroup({
+      layout: gpu.bindGroupLayouts.frame,
+      entries: [{
+        binding: 0,
+        resource: { buffer: this.cameraBuffer, },
+      }, {
+        binding: 1,
+        resource: { buffer: lightBuffer.gpuBuffer, },
+      }, {
+        binding: 2,
+        resource: { buffer: this.clusterLightsBuffer, },
+      }, {
+        binding: 3,
+        resource: gpu.defaultSampler,
+      }, {
+        binding: 4,
+        resource: gpu.shadowDepthTextureView,
+      }, {
+        binding: 5,
+        resource: gpu.shadowUnfilteredDepthSampler,
+      }, {
+        binding: 6,
+        resource: { buffer: gpu.lightShadowTableBuffer, },
+      }, {
+        binding: 7,
+        resource: { buffer: gpu.shadowPropertiesBuffer, },
+      }],
+    });
   }
 }
 
