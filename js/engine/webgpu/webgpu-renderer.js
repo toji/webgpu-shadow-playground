@@ -74,8 +74,11 @@ export class WebGPURenderer extends Renderer {
 
     this.shadowDepthSampler = this.device.createSampler({
       minFilter: 'linear',
-      maxFilter: 'linear',
+      magFilter: 'linear',
       mipmapFilter: 'linear',
+      compare: 'less',
+    });
+    this.shadowUnfilteredDepthSampler = this.device.createSampler({
       compare: 'less',
     });
 
@@ -177,7 +180,7 @@ export class WebGPURenderer extends Renderer {
 
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
-    passEncoder.setBindGroup(0, camera.bindGroup);
+    passEncoder.setBindGroup(0, this.flags.shadowFiltering ? camera.bindGroup : camera.bindGroupUnfilteredShadow);
 
     // Loop through all the renderable entities and store them by pipeline.
     for (const pipeline of this.renderBatch.sortedPipelines) {
@@ -214,7 +217,7 @@ export class WebGPURenderer extends Renderer {
 
           // Restore the camera binding if needed
           if (material?.firstBindGroupIndex == 0) {
-            passEncoder.setBindGroup(0, camera.bindGroup);
+            passEncoder.setBindGroup(0, this.flags.shadowFiltering ? camera.bindGroup : camera.bindGroupUnfilteredShadow);
           }
         }
       }
